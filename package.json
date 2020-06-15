@@ -1,0 +1,17 @@
+{
+  "name": "cart-creator",
+  "version": "1.0.0",
+  "description": "Use to test mass creation of carts on encoded",
+  "main": "main.js",
+  "dependencies": {
+    "cli-progress": "^3.8.2",
+    "commander": "^5.1.0",
+    "node-fetch": "^2.6.0"
+  },
+  "devDependencies": {},
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "Forrest Tanaka",
+  "license": "ISC"
+}
