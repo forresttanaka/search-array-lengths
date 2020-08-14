@@ -5,11 +5,6 @@ const fs = require('fs');
 const fetch = require('node-fetch');
 const cliProgress = require('cli-progress');
 
-
-const accessKey = '7KEJTBBF';
-const secretKey = 'tt4wcs436s6zoxop';
-
-
 /**
  * Convert a user key and secret assigned to them on an encoded site to an authorization string for
  * XHR requests.
@@ -21,8 +16,6 @@ const secretKey = 'tt4wcs436s6zoxop';
 const keypairToAuth = (key, secret) => (
     `Basic ${Buffer.from(unescape(encodeURIComponent(`${key}:${secret}`))).toString('base64')}`
 );
-
-
 
 /**
  * Read a file and return its data in a Promise.
@@ -43,7 +36,6 @@ const readFile = (path, opts = 'utf8') => (
     })
 );
 
-
 /**
  * Retrieve the JSON contents of the key file that contains the authentication information as well
  * as the URL of the host we'll be searching.
@@ -55,7 +47,6 @@ const readKeyfile = async (keyfile) => {
     const results = await readFile(keyfile);
     return JSON.parse(results);
 };
-
 
 /**
  * Create a new cart on the specified host.
@@ -96,7 +87,6 @@ const newCart = (host, auth, suffix, debug) => {
     });
 };
 
-
 /**
  * Create multiple new empty carts.
  * @param {number} count Number of new carts to create
@@ -107,16 +97,16 @@ const newCart = (host, auth, suffix, debug) => {
  * @param {bool} debug True to output debug messages to console
  *
  * @return {Promise} Promise for cart creation
- */const multipleNewCarts = async (count, start, host, auth, progressBar, debug) => {
+ */
+const multipleNewCarts = async (count, start, host, auth, progressBar, debug) => {
     for (let i = 0; i < count; i += 1) {
-        const response = await newCart(host, auth, i + parseInt(start), debug);
+        const response = await newCart(host, auth, i + parseInt(start, 10), debug);
         if (debug) {
             console.log('NEW CART JSON %o', response);
         }
         progressBar.update(i + 1);
     }
-}
-
+};
 
 program
     .version('1.0.0')
@@ -127,10 +117,8 @@ program
     .option('-d, --debug', 'Debug flag', false)
     .parse(process.argv);
 
-
 let keyFileData;
 const progressBar = new cliProgress.SingleBar({}, cliProgress.Presets.shades_classic);
-
 
 readKeyfile(program.keyfile).then((resultJson) => {
     keyFileData = resultJson;
