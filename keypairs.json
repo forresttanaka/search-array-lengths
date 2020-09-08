@@ -1,11 +1,11 @@
 {
     "localhost": {
         "server": "http://localhost:6543",
-        "key":"RABNK324",
-        "secret": "tdslj7fiah775wu5"
+        "key":"KTOFQXRG",
+        "secret": "6qzogwvmvumded2y"
     },
-    "demo": {
-        "server": "https://encd-5353-cart-limit-pr1-fytanaka.demo.encodedcc.org",
+    "test": {
+        "server": "https://test.encodedcc.org",
         "key":"XXXXXXXX",
         "secret": "xxxxxxxxxxxxxxxx"
     },
