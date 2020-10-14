@@ -8,6 +8,9 @@ const cliProgress = require('cli-progress');
 /** Number of objects to get in one chunk */
 const CHUNK_SIZE = 500;
 
+/** Create a new progress bar */
+const progressBar = new cliProgress.SingleBar({}, cliProgress.Presets.shades_classic);
+
 /**
  * Convert a user key and secret assigned to them on an encoded site to an authorization string for
  * XHR requests.
@@ -51,7 +54,13 @@ const readKeyfile = async (keyfile) => {
     return JSON.parse(results);
 };
 
-const encodedURIComponent = value => (
+/**
+ * Convert arbitrary text into a form the ENCODE portal can use in query-string values.
+ * @param value {string} Value to convert
+ *
+ * @return {string} converted value.
+ */
+const encodedURIComponent = (value) => (
     encodeURIComponent(value)
         .replace(/\(/g, '%28')
         .replace(/\)/g, '%29')
@@ -60,11 +69,30 @@ const encodedURIComponent = value => (
 );
 
 /**
- * Create a new cart on the specified host.
+ * Extract the value of an object property based on a dotted-notation field,
+ * e.g. { a: 1, b: { c: 5 }} you could retrieve the 5 by passing 'b.c' in `field`.
+ * Based on https://stackoverflow.com/questions/6393943/convert-javascript-string-in-dot-notation-into-an-object-reference#answer-6394168
+ * @param {object} object Object containing the value you want to extract.
+ * @param {string} field  Dotted notation for the property to extract.
+ *
+ * @return {value} Whatever value the dotted notation specifies, or undefined if unavailable.
+ */
+const getObjectFieldValue = (object, field) => {
+    const parts = field.split('.');
+    if (parts.length === 1) {
+        return object[field];
+    }
+    return parts.reduce((partObject, part) => partObject && partObject[part], object);
+};
+
+/**
+ * Get a chunk of object search results.
  * @param {string} host URL of host to perform search on
  * @param {string} auth base64-encoded key and secret for POST permission
- * @param {number} suffix New carts will start with this suffix "Test Cart {suffix}"
- * @param {bool} debug True to output debug messages to console
+ * @param {string} type Type of object to retrieve e.g. Experiment
+ * @param {string} field Property of object to retrieve e.g. file.@id
+ * @param {number} from Search result index to start from
+ * @param {bool} debug True to output debugging messages
  *
  * @return {Promise} Search result object
  */
@@ -77,7 +105,6 @@ const getChunk = (host, auth, type, field, from, debug) => {
         headers: {
             Accept: 'application/json',
             'Content-Type': 'application/json',
-            Authorization: auth,
         },
     }).then((response) => {
         if (debug) {
@@ -95,40 +122,46 @@ const getChunk = (host, auth, type, field, from, debug) => {
 };
 
 /**
- * Extract the value of an object property based on a dotted-notation field,
- * e.g. { a: 1, b: { c: 5 }} you could retrieve the 5 by passing 'b.c' in `field`.
- * Based on https://stackoverflow.com/questions/6393943/convert-javascript-string-in-dot-notation-into-an-object-reference#answer-6394168
- * @param {object} object Object containing the value you want to extract.
- * @param {string} field  Dotted notation for the property to extract.
- *
- * @return {value} Whatever value the dotted notation specifies, or undefined.
+ * Get all requested search-result chunks.
+ * @param {string} host URL of host to perform search on
+ * @param {string} auth base64-encoded key and secret for POST permission
+ * @param {string} type Type of object to retrieve e.g. Experiment
+ * @param {string} field Property of object to retrieve e.g. file.@id
+ * @param {number} less Filter to array lengths <= this value
+ * @param {number} greater Filter to array lengths >= this value
+ * @param {bool} debug True to output debugging messages
  */
-const getObjectFieldValue = (object, field) => {
-    const parts = field.split('.');
-    if (parts.length === 1) {
-        return object[field];
-    }
-    return parts.reduce((partObject, part) => partObject && partObject[part], object);
-};
-
 const getAllChunks = async (host, auth, type, field, less, greater, debug) => {
     let from = 0;
     let chunksEnded = false;
+    let total = 0;
     const results = [];
     while (!chunksEnded) {
         const chunk = await getChunk(host, auth, type, field, from, debug);
         chunksEnded = chunk['@graph'].length === 0;
         if (!chunksEnded) {
+            // Update the progress bar once we know how many results we should see.
+            if (total === 0) {
+                total = chunk.total;
+                progressBar.start(total, 0);
+            }
+
+            // For each result, add any that satisfy the user's array-length criteria to the
+            // results.
             chunk['@graph'].forEach((obj) => {
                 const lengthField = field.substring(0, field.lastIndexOf('.'));
                 const value = getObjectFieldValue(obj, lengthField);
                 if (value && value.length >= greater && value.length <= less) {
-                    console.log('%s - %s', obj['@id'], value.length);
+                    results.push(`${obj['@id']} - ${value.length}`);
                 }
             });
+
+            // Update progress and go to the next chunk starting index.
             from += CHUNK_SIZE;
+            progressBar.update(from);
         }
     }
+    return results;
 };
 
 program
@@ -143,11 +176,15 @@ program
     .parse(process.argv);
 
 let keyFileData;
-const progressBar = new cliProgress.SingleBar({}, cliProgress.Presets.shades_classic);
 
 readKeyfile(program.keyfile).then((resultJson) => {
     keyFileData = resultJson;
     const auth = keypairToAuth(keyFileData[program.key].key, keyFileData[program.key].secret);
     return getAllChunks(keyFileData[program.key].server, auth, program.type, program.property, program.less, program.greater, program.debug);
 }).then((searchResults) => {
+    progressBar.stop();
+    console.log('\n%s results', searchResults.length);
+    searchResults.forEach((result) => {
+        console.log(result);
+    });
 });
