@@ -96,11 +96,12 @@ const getObjectFieldValue = (object, field) => {
  *
  * @return {Promise} Search result object
  */
-const getChunk = (host, auth, type, field, from, debug) => {
+const getChunk = (host, auth, type, field, filters, from, debug) => {
+    const searchUrl = `${host}/report/?type=${type}${filters ? `&${filters}` : ''}&limit=${CHUNK_SIZE}&from=${from}&field=${encodedURIComponent(field)}`;
     if (debug) {
-        console.log('REQUEST %s:%s:%s', host, type, field);
+        console.log('REQUEST %s:%s:%s\n%s', host, type, field, searchUrl);
     }
-    return fetch(`${host}/report/?type=${type}&limit=${CHUNK_SIZE}&from=${from}&field=${encodedURIComponent(field)}`, {
+    return fetch(searchUrl, {
         method: 'GET',
         headers: {
             Accept: 'application/json',
@@ -131,13 +132,13 @@ const getChunk = (host, auth, type, field, from, debug) => {
  * @param {number} greater Filter to array lengths >= this value
  * @param {bool} debug True to output debugging messages
  */
-const getAllChunks = async (host, auth, type, field, less, greater, debug) => {
+const getAllChunks = async (host, auth, type, field, filters, less, greater, debug) => {
     let from = 0;
     let chunksEnded = false;
     let total = 0;
     const results = [];
     while (!chunksEnded) {
-        const chunk = await getChunk(host, auth, type, field, from, debug);
+        const chunk = await getChunk(host, auth, type, field, filters, from, debug);
         chunksEnded = chunk['@graph'].length === 0;
         if (!chunksEnded) {
             // Update the progress bar once we know how many results we should see.
@@ -149,7 +150,7 @@ const getAllChunks = async (host, auth, type, field, less, greater, debug) => {
             // For each result, add any that satisfy the user's array-length criteria to the
             // results.
             chunk['@graph'].forEach((obj) => {
-                const lengthField = field.substring(0, field.lastIndexOf('.'));
+                const lengthField = field.includes('.') ? field.substring(0, field.lastIndexOf('.')) : field;
                 const value = getObjectFieldValue(obj, lengthField);
                 if (value && value.length >= greater && value.length <= less) {
                     results.push(`${obj['@id']} - ${value.length}`);
@@ -170,6 +171,7 @@ program
     .option('-f, --keyfile [filename]', 'keyfile name/path', 'keypairs.json')
     .option('-t, --type [string]', 'type of objects to search', 'Experiment')
     .option('-p, --property [string]', 'property to search', 'files.@id')
+    .option('-a, --filter [string]', 'additional filters', '')
     .option('-g, --greater [string]', 'filter to array lengths >= this', '1')
     .option('-l, --less [string]', 'filter to array lengths <= this', Number.MAX_VALUE)
     .option('-d, --debug', 'Debug flag', false)
@@ -180,7 +182,7 @@ let keyFileData;
 readKeyfile(program.keyfile).then((resultJson) => {
     keyFileData = resultJson;
     const auth = keypairToAuth(keyFileData[program.key].key, keyFileData[program.key].secret);
-    return getAllChunks(keyFileData[program.key].server, auth, program.type, program.property, program.less, program.greater, program.debug);
+    return getAllChunks(keyFileData[program.key].server, auth, program.type, program.property, program.filter, program.less, program.greater, program.debug);
 }).then((searchResults) => {
     progressBar.stop();
     console.log('\n%s results', searchResults.length);
